@@ -51,66 +51,63 @@ rubric_re = re.compile(r"^\d[(\. )(\) )] ")  # Например:  `1) перев
 japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF]")  # яп. символы вначале строки
 
 text = Path("test_excerpt.txt").read_text(encoding="utf-16-le")
-status = 0
+cards = text.split("\n\n")[1:]  # Разбивка текста на карточки и пропуск лицензии
 dictionary_entries: list[Entry] = []
 
-for card in text.split("\n\n")[1:]:  # Разбивка текста на карточки и пропуск лицензии
-    numbered_rubrics_exist = False  # наличие нескольких рубрик, при этом нет секций
-    many_rubrics = False
+for card in cards:
+    numbered_rubrics_exist = False
+    many_rubrics = False  # наличие нескольких рубрик, при отсутствии секций
     sections_exist = False
     sections: list[Section] = []
     rubrics: list[Rubric] = []
     rubric = Rubric("")
 
-    for line in card.splitlines():
+    lines = card.splitlines()
+
+    # Заполнение полей заголовка (структуры Header) карточки
+    match = header_re.match(lines[0])
+    kana, kanji, transcription, corpus, id = match.groups()
+    header = Header(kana, kanji, transcription, corpus, id)
+
+    for line in lines[1:]:
         line = line.rstrip(";,. ")  # Убираем запятые разделяющие примеры и рубрики
 
-        # Заголовок всегда один
-        if status == 0:
-            match = header_re.match(line)
-            kana, kanji, transcription, corpus, id = match.groups()
-            header = Header(kana, kanji, transcription, corpus, id)
-            status = 1
+        # Может быть: либо группа рубрик, либо рубрика с переводами и примерами
+        if section_num_re.match(line):
+            # Нумерованная группа рубрик 1. 2. и т.п.
+            sections_exist = True
+            if rubrics:  # не пустая рубрика
+                sections.append(Section(rubrics))
+            rubrics: list[Rubric] = []
             continue
 
-        # Дальше может быть: либо группа рубрик, либо рубрика с переводами и примерами
-        elif status == 1:
-            if section_num_re.match(line):
-                # Нумерованная группа рубрик
-                sections_exist = True
-                if rubrics:  # not empty rubrics
-                    sections.append(Section(rubrics))
-                rubrics: list[Rubric] = []
-                continue
+        if japanese_re.match(line):
+            # Добавляем пример или идиоматическое выражение (т.к. начинается с японских символов)
+            rubric.examples.append(line)
+        else:
+            # Строка содержит начало рубрики (т.е. первевод, а не пример)
 
-            if japanese_re.match(line):
-                # Если начинается с японских символов
-                # То есть содержит пример или идиоматическое выражение
-                rubric.examples.append(line)
-            else:
-                # Строка содержит перевод (начало рубрики)
+            # Для заполнения поля (Entry.common_note)
+            if rubric_re.match(line):
+                numbered_rubrics_exist = True
 
-                # Для поля (Entry.common_note)
-                if rubric_re.match(line):
-                    numbered_rubrics_exist = True
+            # rubric_re.sub("", line) удаляет `1) ` или `1. ` в начале строки
+            rubric = Rubric(rubric_re.sub("", line))
+            rubrics.append(rubric)
 
-                # rubric_re.sub("", line) удаляет "1) ", "1. ", но не убриает а) б)
-                rubric = Rubric(rubric_re.sub("", line))
-                rubrics.append(rubric)
-
-        # Для поля (Entry.common_note)
+        # Для заполнения поля (Entry.common_note)
         if numbered_rubrics_exist and len(rubrics) > 1 and not sections_exist:
             many_rubrics = True
 
     sections.append(Section(rubrics))
     entry = Entry(header, sections)
 
-    # Перенсим "общее уточенение" из первой рубрики в entry
+    # Переносим "общее уточенение" из первой рубрики в entry
     if len(sections) > 1 and not numbered_rubrics_exist or many_rubrics:
         entry.common_note = sections[0].rubrics[0].translation
         sections[0].rubrics = sections[0].rubrics[1:]
     dictionary_entries.append(entry)
-    status = 0
+
 
 for entry in dictionary_entries:
     print(f"Слово: {entry.header.kana}")
