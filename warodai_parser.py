@@ -22,13 +22,6 @@ class Rubric:
     examples: list[str] = field(default_factory=list)  # в т.ч. идиомы
 
 
-# NOTE: иногда перед началом рубрик (или групп рубрик) может быть общий поясняющий текст,
-# как например в карточке 004-55-64, а иногда этот текст сам является
-# переводом (если в карточке нет рубрик). Этот момент реализован так:
-# у каждой карточки всегда есть первая группа (секция) которая содержит,
-# упомянутое ранее "общее уточнение", если такавого нет, то эта секция будет пустой.
-# TODO: можно сделать отдельное поле в `Entry`, которое содержит общее уточнение,
-# если в карточке затем идут секции или группы секций.
 @dataclass
 class Section:
     """Несколько рубрик объединённые в секции/группы (разделяются числами с точкой на отдельной строке)."""
@@ -42,6 +35,7 @@ class Entry:
 
     header: Header
     sections: list[Section] = field(default_factory=list)
+    common_note: str | None = None
 
 
 @dataclass
@@ -61,9 +55,13 @@ status = 0
 dictionary_entries: list[Entry] = []
 
 for card in text.split("\n\n")[1:]:  # Разбивка текста на карточки и пропуск лицензии
+    numbered_rubrics_exist = False  # наличие нескольких рубрик, при этом нет секций
+    many_rubrics = False
+    sections_exist = False
     sections: list[Section] = []
     rubrics: list[Rubric] = []
     rubric = Rubric("")
+
     for line in card.splitlines():
         line = line.rstrip(";,. ")  # Убираем запятые разделяющие примеры и рубрики
 
@@ -78,8 +76,10 @@ for card in text.split("\n\n")[1:]:  # Разбивка текста на кар
         # Дальше может быть: либо группа рубрик, либо рубрика с переводами и примерами
         elif status == 1:
             if section_num_re.match(line):
-                # Группа рубрик
-                sections.append(Section(rubrics))
+                # Нумерованная группа рубрик
+                sections_exist = True
+                if rubrics:  # not empty rubrics
+                    sections.append(Section(rubrics))
                 rubrics: list[Rubric] = []
                 continue
 
@@ -89,18 +89,32 @@ for card in text.split("\n\n")[1:]:  # Разбивка текста на кар
                 rubric.examples.append(line)
             else:
                 # Строка содержит перевод (начало рубрики)
+
+                # Для поля (Entry.common_note)
+                if rubric_re.match(line):
+                    numbered_rubrics_exist = True
+
                 # rubric_re.sub("", line) удаляет "1) ", "1. ", но не убриает а) б)
                 rubric = Rubric(rubric_re.sub("", line))
                 rubrics.append(rubric)
 
+        # Для поля (Entry.common_note)
+        if numbered_rubrics_exist and len(rubrics) > 1 and not sections_exist:
+            many_rubrics = True
+
     sections.append(Section(rubrics))
-    dentry = Entry(header, sections)
-    dictionary_entries.append(dentry)
+    entry = Entry(header, sections)
+
+    # Перенсим "общее уточенение" из первой рубрики в entry
+    if len(sections) > 1 and not numbered_rubrics_exist or many_rubrics:
+        entry.common_note = sections[0].rubrics[0].translation
+        sections[0].rubrics = sections[0].rubrics[1:]
+    dictionary_entries.append(entry)
     status = 0
 
 for entry in dictionary_entries:
     print(f"Слово: {entry.header.kana}")
-    for i, section in enumerate(entry.sections):
+    for i, section in enumerate(entry.sections, start=1):
         print(f"Секция: {i}.")
         for j, rubric in enumerate(section.rubrics, start=1):
             print(f" Перевод {j}: {rubric.translation}")
