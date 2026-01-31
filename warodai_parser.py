@@ -1,6 +1,7 @@
 import re
-from dataclasses import dataclass, field
+import json
 from pathlib import Path
+from dataclasses import asdict, dataclass, field
 
 
 @dataclass
@@ -108,13 +109,7 @@ for card in cards:
         sections[0].rubrics = sections[0].rubrics[1:]
     dictionary_entries.append(entry)
 
-
-for entry in dictionary_entries:
-    print(f"Слово: {entry.header.kana}")
-    for i, section in enumerate(entry.sections, start=1):
-        print(f"Секция: {i}.")
-        for j, rubric in enumerate(section.rubrics, start=1):
-            print(f" Перевод {j}: {rubric.translation}")
-            for k, example in enumerate(rubric.examples, start=1):
-                print(f"  Пример {k}. {example}")
-    print()
+# TODO: сохранение в SQLite
+warodai = WarodaiDictionary(dictionary_entries)
+with Path("warodai_out.json").open("w", encoding="utf-8") as f:
+    json.dump(asdict(warodai), f, ensure_ascii=False, indent=2)
