@@ -51,7 +51,7 @@ section_num_re = re.compile(r"^\d$")  # Например: `1` (точка опу
 rubric_re = re.compile(r"^\d[(\. )(\) )] ")  # Например:  `1) перевод` или просто `1) `
 japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF]")  # яп. символы вначале строки
 
-text = Path("test_excerpt.txt").read_text(encoding="utf-16-le")
+text = Path("warodai.txt").read_text(encoding="utf-16-le")
 cards = text.split("\n\n")[1:]  # Разбивка текста на карточки и пропуск лицензии
 dictionary_entries: list[Entry] = []
 
