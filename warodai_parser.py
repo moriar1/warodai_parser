@@ -9,9 +9,9 @@ from dataclasses import asdict, dataclass, field
 class Header:
     """Заголовок карточки/статьи с первеводом"""
 
-    kana: str
-    kanji: str | None
-    transcription: str
+    kana: list[str]
+    kanji: list[str] | None
+    transcription: list[str]
     corpus: str | None
     id: str
 
@@ -75,6 +75,11 @@ for card in cards:
         print(f"Не удалось разорбрать заголовок: {lines[0]}", file=sys.stderr)
         continue
     kana, kanji, transcription, corpus, id = match.groups()
+    # Создание списков из элементов разделённых запятыми и точками
+    if kanji:
+        kanji = [k.strip() for k in re.split(r"[,･・\s]", kanji) if k.strip()]
+    kana = [k.strip() for k in re.split(r"[,･・\s]", kana) if k.strip()]
+    transcription = [t.strip() for t in re.split(r"[,\s]", transcription) if t.strip()]
     header = Header(kana, kanji, transcription, corpus, id)
 
     for line in lines[1:]:
