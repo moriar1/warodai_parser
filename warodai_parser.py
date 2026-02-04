@@ -1,3 +1,4 @@
+import sys
 import re
 import json
 from pathlib import Path
@@ -46,7 +47,9 @@ class WarodaiDictionary:
     entries: list[Entry] = field(default_factory=list)
 
 
-header_re = re.compile(r"^([\w,…･・！ ]+)(?:【(.+)】)?\((.+)\)(?: \[(.+)\])?〔(.+)〕$")
+header_re = re.compile(
+    r"^([\w,…･・！ ]+)(?:【(.+)】)?\((.+)\)(?: \[(.+)\])?(?: )?〔(.+)〕$"
+)
 section_num_re = re.compile(r"^\d$")  # Например: `1` (точка опускается из-за rstrip())
 rubric_re = re.compile(r"^\d[(\. )(\) )] ")  # Например:  `1) перевод` или просто `1) `
 japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF]")  # яп. символы вначале строки
@@ -65,8 +68,12 @@ for card in cards:
 
     lines = card.splitlines()
 
-    # Заполнение полей заголовка (структуры Header) карточки
+    # Заполнение полей заголовка (структуры Header)
     match = header_re.match(lines[0])
+    # Иногда встречаются лишние пробелы и пр. между полями заголовка
+    if match is None:
+        print(f"Не удалось разорбрать заголовок: {lines[0]}", file=sys.stderr)
+        continue
     kana, kanji, transcription, corpus, id = match.groups()
     header = Header(kana, kanji, transcription, corpus, id)
 
