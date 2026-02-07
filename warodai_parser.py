@@ -20,8 +20,10 @@ class Header:
 class Rubric:
     """Рубрика с переводами, примерами, идиомами и т.д."""
 
-    translation: str
-    examples: list[str] = field(default_factory=list)  # в т.ч. идиомы
+    translation: str  # в т.ч. Замена перевода производным (: ～する, : ～の)
+    examples: list[str] = field(default_factory=list)
+    derivatives: list[str] = field(default_factory=list)
+    idioms: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -52,7 +54,7 @@ header_re = re.compile(
 )
 section_num_re = re.compile(r"^\d$")  # Например: `1` (точка опускается из-за rstrip())
 rubric_re = re.compile(r"^\d[(\. )(\) )] ")  # Например:  `1) перевод` или просто `1) `
-japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF]")  # яп. символы вначале строки
+japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF◇～]")  # яп симвл вначале строки
 
 text = Path("warodai.txt").read_text(encoding="utf-16-le")
 cards = text.split("\n\n")[1:]  # Разбивка текста на карточки и пропуск лицензии
@@ -96,7 +98,12 @@ for card in cards:
 
         if japanese_re.match(line):
             # Добавляем пример или идиоматическое выражение (т.к. начинается с японских символов)
-            rubric.examples.append(line)
+            if line.startswith("～"):
+                rubric.derivatives.append(line)
+            elif line.startswith("◇"):
+                rubric.idioms.append(line)
+            else:
+                rubric.examples.append(line)
         else:
             # Строка содержит начало рубрики (т.е. первевод, а не пример)
 
