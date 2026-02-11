@@ -30,6 +30,7 @@ class Rubric:
 class Section:
     """Несколько рубрик объединённые в секции/группы (разделяются числами с точкой на отдельной строке)."""
 
+    # NOTE: если есть общее пояснение, то оно будет находиться в первой рубрике
     rubrics: list[Rubric] = field(default_factory=list)
 
 
@@ -39,7 +40,6 @@ class Entry:
 
     header: Header
     sections: list[Section] = field(default_factory=list)
-    common_note: str | None = None
 
 
 @dataclass
@@ -52,18 +52,15 @@ class WarodaiDictionary:
 header_re = re.compile(
     r"^([\w,…･・！ ]+)(?:【(.+)】)?\((.+)\)(?: \[(.+)\])?(?: )?〔(.+)〕$"
 )
-section_num_re = re.compile(r"^\d$")  # Например: `1` (точка опускается из-за rstrip())
+section_num_re = re.compile(r"^\d.$")  # Например: `1.` на отдельной строке
 rubric_re = re.compile(r"^\d[(\. )(\) )] ")  # Например:  `1) перевод` или просто `1) `
-japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF◇～]")  # яп симвл вначале строки
+japanese_re = re.compile(r"^[\u3040-\u30FF\u4E00-\u9FFF◇～…]")  # яп символ вначале
 
 text = Path("warodai.txt").read_text(encoding="utf-16-le")
 cards = text.split("\n\n")[1:]  # Разбивка текста на карточки и пропуск лицензии
 dictionary_entries: list[Entry] = []
 
 for card in cards:
-    numbered_rubrics_exist = False
-    many_rubrics = False  # наличие нескольких рубрик, при отсутствии секций
-    sections_exist = False
     sections: list[Section] = []
     rubrics: list[Rubric] = []
     rubric = Rubric("")
@@ -84,17 +81,16 @@ for card in cards:
     transcription = [t.strip() for t in re.split(r"[,\s]", transcription) if t.strip()]
     header = Header(kana, kanji, transcription, corpus, id)
 
+    # Парсинг тела словарной статьи
     for line in lines[1:]:
-        line = line.rstrip(";,. ")  # Убираем запятые разделяющие примеры и рубрики
-
         # Может быть: либо группа рубрик, либо рубрика с переводами и примерами
         if section_num_re.match(line):
             # Нумерованная группа рубрик 1. 2. и т.п.
-            sections_exist = True
             if rubrics:  # не пустая рубрика
                 sections.append(Section(rubrics))
             rubrics: list[Rubric] = []
             continue
+        line = line.rstrip(";,. ")  # Убираем запятые разделяющие примеры и рубрики
 
         if japanese_re.match(line):
             # Добавляем пример или идиоматическое выражение (т.к. начинается с японских символов)
@@ -106,26 +102,12 @@ for card in cards:
                 rubric.examples.append(line)
         else:
             # Строка содержит начало рубрики (т.е. первевод, а не пример)
-
-            # Для заполнения поля (Entry.common_note)
-            if rubric_re.match(line):
-                numbered_rubrics_exist = True
-
-            # rubric_re.sub("", line) удаляет `1) ` или `1. ` в начале строки
+            # удаление `1) ` или `1. ` в начале строки
             rubric = Rubric(rubric_re.sub("", line))
             rubrics.append(rubric)
 
-        # Для заполнения поля (Entry.common_note)
-        if numbered_rubrics_exist and len(rubrics) > 1 and not sections_exist:
-            many_rubrics = True
-
     sections.append(Section(rubrics))
     entry = Entry(header, sections)
-
-    # Переносим "общее уточенение" из первой рубрики в entry
-    if len(sections) > 1 and not numbered_rubrics_exist or many_rubrics:
-        entry.common_note = sections[0].rubrics[0].translation
-        sections[0].rubrics = sections[0].rubrics[1:]
     dictionary_entries.append(entry)
 
 # TODO: сохранение в SQLite
